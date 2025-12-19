@@ -13,6 +13,7 @@ export default function SubscriptionSuccessPage() {
   const sessionId = searchParams.get('session_id');
   const { fetchUser } = useAuthStore();
   const [isLoading, setIsLoading] = useState(true);
+  const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
     // Refresh user data to get updated subscription status
@@ -33,6 +34,18 @@ export default function SubscriptionSuccessPage() {
       setIsLoading(false);
     }
   }, [sessionId, fetchUser]);
+
+  // Auto-redirect countdown
+  useEffect(() => {
+    if (!isLoading && countdown > 0) {
+      const timer = setTimeout(() => {
+        setCountdown(countdown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (countdown === 0) {
+      router.push('/courses');
+    }
+  }, [isLoading, countdown, router]);
 
   if (isLoading) {
     return (
@@ -114,12 +127,19 @@ export default function SubscriptionSuccessPage() {
                 </div>
               )}
 
+              {/* Auto-redirect notice */}
+              <div className="mb-6 p-4 bg-[#A66CFF]/10 rounded-xl border border-[#A66CFF]/30">
+                <p className="text-sm text-gray-700">
+                  Redirecting to courses in <span className="font-bold text-[#A66CFF] text-lg">{countdown}</span> seconds...
+                </p>
+              </div>
+
               {/* CTA Buttons */}
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Link href="/courses">
                   <Button size="xl" className="group">
                     <Rocket className="mr-2 h-5 w-5 group-hover:animate-wiggle" />
-                    Start Learning
+                    Start Learning Now
                     <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
