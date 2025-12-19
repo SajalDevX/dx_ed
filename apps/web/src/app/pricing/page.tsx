@@ -1,6 +1,13 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
-import { Check, Sparkles, Zap, Crown, Rocket, Shield, Star, Trophy, ArrowRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Check, Sparkles, Zap, Crown, Rocket, Shield, Star, Trophy, ArrowRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { useAuthStore } from '@/stores/authStore';
+import { paymentsApi } from '@/lib/api/payments';
+import toast from 'react-hot-toast';
 
 const plans = [
   {
@@ -20,7 +27,7 @@ const plans = [
       { text: 'Skill certificates', included: false },
     ],
     cta: 'Start Free',
-    href: '/register',
+    plan: 'starter',
     popular: false,
   },
   {
@@ -40,7 +47,7 @@ const plans = [
       { text: 'Legendary badges (50+)', included: true },
     ],
     cta: 'Become a Hero',
-    href: '/register?plan=hero',
+    plan: 'hero',
     popular: true,
   },
   {
@@ -60,7 +67,7 @@ const plans = [
       { text: 'Custom guild branding', included: true },
     ],
     cta: 'Contact Sales',
-    href: '/contact',
+    plan: 'guild',
     popular: false,
   },
 ];
@@ -89,6 +96,51 @@ const faqs = [
 ];
 
 export default function PricingPage() {
+  const router = useRouter();
+  const { isAuthenticated } = useAuthStore();
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+
+  const handlePlanSelect = async (plan: typeof plans[0]) => {
+    // Guild plan always goes to contact
+    if (plan.plan === 'guild') {
+      router.push('/contact');
+      return;
+    }
+
+    // Starter plan - go to register or courses
+    if (plan.plan === 'starter') {
+      if (isAuthenticated) {
+        router.push('/courses');
+      } else {
+        router.push('/register');
+      }
+      return;
+    }
+
+    // Hero plan - needs authentication first
+    if (!isAuthenticated) {
+      router.push('/register?plan=hero');
+      return;
+    }
+
+    // Logged in user selecting Hero - go to Stripe checkout
+    try {
+      setLoadingPlan(plan.plan);
+      const response = await paymentsApi.createSubscriptionCheckout('hero');
+
+      if (response.success && response.data?.url) {
+        window.location.href = response.data.url;
+      } else {
+        toast.error('Failed to create checkout session');
+      }
+    } catch (error) {
+      console.error('Checkout error:', error);
+      toast.error('Failed to start checkout. Please try again.');
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
   return (
     <div className="bg-[#FFF9E6] min-h-screen overflow-hidden">
       {/* Floating decorations */}
@@ -201,16 +253,24 @@ export default function PricingPage() {
                   </ul>
 
                   {/* CTA */}
-                  <Link href={plan.href} className="block mt-8">
+                  <div className="mt-8">
                     <Button
+                      onClick={() => handlePlanSelect(plan)}
+                      disabled={loadingPlan === plan.plan}
                       className={`w-full h-12 text-base group ${plan.popular ? '' : 'bg-white text-[#2D2D2D] border-3 border-[#2D2D2D] shadow-[3px_3px_0_#2D2D2D] hover:shadow-[4px_4px_0_#2D2D2D] hover:-translate-y-0.5'}`}
                       variant={plan.popular ? 'default' : 'secondary'}
                     >
-                      {plan.popular && <Rocket className="mr-2 h-5 w-5 group-hover:animate-wiggle" />}
-                      {plan.cta}
-                      <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                      {loadingPlan === plan.plan ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <>
+                          {plan.popular && <Rocket className="mr-2 h-5 w-5 group-hover:animate-wiggle" />}
+                          {plan.cta}
+                          <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                        </>
+                      )}
                     </Button>
-                  </Link>
+                  </div>
                 </div>
               </div>
             ))}
