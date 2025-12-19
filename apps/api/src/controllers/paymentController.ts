@@ -113,6 +113,13 @@ export const createCheckoutSession = async (
   }
 };
 
+// Plan to Stripe Price ID mapping
+// IMPORTANT: Replace these with your actual Stripe Price IDs from Stripe Dashboard
+const PLAN_PRICE_IDS: Record<string, string> = {
+  hero: process.env.STRIPE_HERO_PRICE_ID || 'price_XXXXX', // Replace with actual Price ID
+  guild: process.env.STRIPE_GUILD_PRICE_ID || 'price_XXXXX', // Replace with actual Price ID
+};
+
 // Create subscription checkout
 export const createSubscriptionCheckout = async (
   req: Request,
@@ -121,7 +128,13 @@ export const createSubscriptionCheckout = async (
 ): Promise<void> => {
   try {
     const stripeClient = getStripe();
-    const { priceId, plan } = req.body;
+    const { plan } = req.body;
+
+    if (!plan || !PLAN_PRICE_IDS[plan]) {
+      throw ApiError.badRequest('Invalid plan specified');
+    }
+
+    const priceId = PLAN_PRICE_IDS[plan];
 
     const user = await User.findById(req.userId);
     if (!user) {
