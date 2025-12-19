@@ -13,7 +13,7 @@ export const connectDatabase = async (retries = 3): Promise<void> => {
       if (attempt === retries) {
         logger.error('All MongoDB connection attempts failed. Please check your MONGODB_URI in .env');
         logger.error('Make sure your MongoDB Atlas user has the correct password and IP whitelist is configured.');
-        process.exit(1);
+        throw new Error('MongoDB connection failed after all retries');
       }
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, 2000));
