@@ -1,6 +1,8 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+// Use relative URL to leverage Next.js rewrites (avoids CORS)
+// The rewrite in next.config.ts proxies /api/v1/* to the backend
+const API_URL = '/api/v1';
 
 // Create axios instance
 export const apiClient: AxiosInstance = axios.create({
@@ -55,7 +57,7 @@ apiClient.interceptors.response.use(
 
       try {
         const response = await axios.post(
-          `${API_URL}/auth/refresh`,
+          '/api/v1/auth/refresh',
           {},
           { withCredentials: true }
         );
