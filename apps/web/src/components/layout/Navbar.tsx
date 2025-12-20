@@ -139,7 +139,7 @@ export function Navbar() {
               </>
             ) : (
               <div className="flex items-center space-x-3">
-                <Link href="/login">
+                <Link href="/auth">
                   <Button variant="secondary">Login / Sign Up</Button>
                 </Link>
               </div>
@@ -176,12 +176,12 @@ export function Navbar() {
               {!isAuthenticated && (
                 <>
                   <hr className="my-2" />
-                  <Link href="/login" onClick={() => setIsMenuOpen(false)}>
+                  <Link href="/auth" onClick={() => setIsMenuOpen(false)}>
                     <Button variant="ghost" className="w-full justify-start">
                       Log in
                     </Button>
                   </Link>
-                  <Link href="/register" onClick={() => setIsMenuOpen(false)}>
+                  <Link href="/auth?mode=signup" onClick={() => setIsMenuOpen(false)}>
                     <Button className="w-full">Get Started</Button>
                   </Link>
                 </>

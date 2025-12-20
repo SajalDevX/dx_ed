@@ -116,14 +116,14 @@ export default function PricingPage() {
       if (isAuthenticated) {
         router.push('/courses');
       } else {
-        router.push('/register');
+        router.push('/auth?mode=signup');
       }
       return;
     }
 
     // Hero plan - needs authentication first
     if (!isAuthenticated) {
-      router.push('/register?plan=hero');
+      router.push('/auth?mode=signup&plan=hero');
       return;
     }
 
@@ -385,7 +385,7 @@ export default function PricingPage() {
                 Join thousands of heroes already mastering digital skills through our gamified learning platform.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link href="/register">
+                <Link href="/auth?mode=signup">
                   <Button size="xl" className="bg-white text-[#2D2D2D] hover:bg-[#FFD93D] group">
                     <Rocket className="mr-2 h-5 w-5 group-hover:animate-wiggle" />
                     Get Started Free

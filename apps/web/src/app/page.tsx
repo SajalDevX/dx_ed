@@ -550,7 +550,7 @@ export default function HomePage() {
                 </p>
 
                 {/* CTA Button */}
-                <Link href="/register">
+                <Link href="/auth?mode=signup">
                   <Button size="xl" className="mt-8 group bg-white text-[#2D2D2D] hover:bg-[#FFD93D]">
                     <Rocket className="mr-2 h-5 w-5 group-hover:animate-wiggle" />
                     Start Your Quest

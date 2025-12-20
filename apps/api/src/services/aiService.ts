@@ -410,6 +410,42 @@ Return a JSON object with a "questions" array:
     const parsed = JSON.parse(content);
     return { questions: parsed.questions || [], provider: selectedProvider };
   }
+
+  // Generate custom content for students
+  async generateCustomStudentContent(params: {
+    courseTitle: string;
+    courseDescription: string;
+    level: 'beginner' | 'intermediate' | 'advanced';
+    studentPrompt: string;
+    provider?: AIProvider;
+  }): Promise<{ content: string; provider: AIProvider }> {
+    const selectedProvider = this.selectProvider(params.provider);
+
+    const systemPrompt = `You are an expert educational content creator and tutor. You're helping a student who is learning about "${params.courseTitle}".
+
+Course Description: ${params.courseDescription}
+Course Level: ${params.level}
+
+Your task is to generate educational content that:
+1. Is accurate, clear, and appropriate for ${params.level} level students
+2. Includes practical examples and analogies when relevant
+3. Is well-structured with clear headings and sections
+4. Uses markdown formatting for better readability
+5. Provides step-by-step explanations when necessary
+6. Encourages learning and understanding, not just memorization
+
+Generate content that directly addresses the student's request while staying relevant to the course topic.`;
+
+    const userPrompt = `Student's request: ${params.studentPrompt}
+
+Please generate comprehensive educational content that addresses this request. Make it engaging, informative, and helpful for their learning journey.`;
+
+    const content = selectedProvider === 'gemini'
+      ? await this.generateWithGemini(systemPrompt, userPrompt, false)
+      : await this.generateWithOpenAI(systemPrompt, userPrompt, false, 2000);
+
+    return { content, provider: selectedProvider };
+  }
 }
 
 export const aiService = new AIService();

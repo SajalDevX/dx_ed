@@ -308,7 +308,7 @@ export default function AboutPage() {
                 Become a hero and start your learning adventure today. It's free to begin!
               </p>
               <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link href="/register">
+                <Link href="/auth?mode=signup">
                   <Button size="xl" className="bg-white text-[#2D2D2D] hover:bg-[#FFD93D] group">
                     <Gamepad2 className="mr-2 h-5 w-5 group-hover:animate-wiggle" />
                     Start Your Journey

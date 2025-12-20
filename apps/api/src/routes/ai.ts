@@ -7,10 +7,39 @@ import {
   addQuestionsToPool,
   generateAndSaveArticle,
   getProviders,
+  getStudentDailyUsage,
+  generateStudentContent,
+  getStudentGenerationHistory,
 } from '../controllers/aiController.js';
 import { authenticate, requirePremium, requireInstructor } from '../middleware/auth.js';
 
 const router = Router();
+
+// ========================================
+// STUDENT-FACING AI ROUTES
+// Require authentication but NOT instructor role
+// ========================================
+
+/**
+ * @route   GET /api/v1/ai/student/daily-usage/:courseId
+ * @desc    Get student's daily AI generation usage for a course
+ * @access  Private (Authenticated + Subscribed)
+ */
+router.get('/student/daily-usage/:courseId', authenticate, getStudentDailyUsage);
+
+/**
+ * @route   POST /api/v1/ai/student/generate
+ * @desc    Generate custom content for a student
+ * @access  Private (Authenticated + Subscribed)
+ */
+router.post('/student/generate', authenticate, generateStudentContent);
+
+/**
+ * @route   GET /api/v1/ai/student/history/:courseId
+ * @desc    Get student's generation history for a course
+ * @access  Private (Authenticated + Subscribed)
+ */
+router.get('/student/history/:courseId', authenticate, getStudentGenerationHistory);
 
 // All AI routes require authentication, premium subscription, and instructor role
 router.use(authenticate);

@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { aiService, AIProvider } from '../services/aiService.js';
 import { Course } from '../models/Course.js';
 import { Quiz } from '../models/Quiz.js';
+import AIGeneration from '../models/AIGeneration.js';
+import { Enrollment } from '../models/Enrollment.js';
 import { ApiError } from '../utils/ApiError.js';
 
 // Provider schema for optional provider selection
@@ -531,6 +533,229 @@ export const generateAndSaveArticle = async (
         content: result.content,
         provider: result.provider,
         message: 'Article content generated and saved successfully',
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ========================================
+// STUDENT-FACING AI CONTENT GENERATION
+// ========================================
+
+const DAILY_GENERATION_LIMIT = 2;
+
+/**
+ * Get student's daily AI generation usage for a course
+ * GET /api/v1/ai/student/daily-usage/:courseId
+ */
+export const getStudentDailyUsage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.userId!;
+
+    // Verify user is subscribed
+    const user = req.user!;
+    if (!user.subscription || user.subscription.plan === 'free') {
+      throw ApiError.forbidden('This feature is only available for subscribed users');
+    }
+
+    // Verify user is enrolled in the course
+    const enrollment = await Enrollment.findOne({
+      user: new Types.ObjectId(userId),
+      course: new Types.ObjectId(courseId),
+    });
+
+    if (!enrollment) {
+      throw ApiError.forbidden('You must be enrolled in this course to use this feature');
+    }
+
+    // Get today's date (start of day in UTC)
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    // Find or create today's generation record
+    let generationRecord = await AIGeneration.findOne({
+      user: new Types.ObjectId(userId),
+      course: new Types.ObjectId(courseId),
+      date: today,
+    });
+
+    const used = generationRecord?.generationsUsed || 0;
+    const remaining = Math.max(0, DAILY_GENERATION_LIMIT - used);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        used,
+        limit: DAILY_GENERATION_LIMIT,
+        remaining,
+        resetsAt: new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Generate custom content for a student
+ * POST /api/v1/ai/student/generate
+ */
+export const generateStudentContent = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { courseId, prompt } = z.object({
+      courseId: z.string().min(1),
+      prompt: z.string().min(10).max(1000),
+    }).parse(req.body);
+
+    const userId = req.userId!;
+
+    // Verify user is subscribed
+    const user = req.user!;
+    if (!user.subscription || user.subscription.plan === 'free') {
+      throw ApiError.forbidden('This feature is only available for subscribed users');
+    }
+
+    // Verify user is enrolled in the course
+    const enrollment = await Enrollment.findOne({
+      user: new Types.ObjectId(userId),
+      course: new Types.ObjectId(courseId),
+    });
+
+    if (!enrollment) {
+      throw ApiError.forbidden('You must be enrolled in this course to use this feature');
+    }
+
+    // Get today's date (start of day in UTC)
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    // Find or create today's generation record
+    let generationRecord = await AIGeneration.findOne({
+      user: new Types.ObjectId(userId),
+      course: new Types.ObjectId(courseId),
+      date: today,
+    });
+
+    // Check daily limit
+    const used = generationRecord?.generationsUsed || 0;
+    if (used >= DAILY_GENERATION_LIMIT) {
+      throw ApiError.forbidden(
+        `Daily generation limit reached. You can generate ${DAILY_GENERATION_LIMIT} pieces of content per day. Your limit resets at midnight UTC.`
+      );
+    }
+
+    // Get course details for context
+    const course = await Course.findById(courseId);
+    if (!course) {
+      throw ApiError.notFound('Course not found');
+    }
+
+    // Generate content using AI service
+    const result = await aiService.generateCustomStudentContent({
+      courseTitle: course.title,
+      courseDescription: course.description,
+      level: course.level as 'beginner' | 'intermediate' | 'advanced',
+      studentPrompt: prompt,
+    });
+
+    // Save or update generation record
+    if (!generationRecord) {
+      generationRecord = await AIGeneration.create({
+        user: new Types.ObjectId(userId),
+        course: new Types.ObjectId(courseId),
+        date: today,
+        generationsUsed: 1,
+        generations: [{
+          prompt,
+          content: result.content,
+          createdAt: new Date(),
+        }],
+      });
+    } else {
+      generationRecord.generationsUsed += 1;
+      generationRecord.generations.push({
+        prompt,
+        content: result.content,
+        createdAt: new Date(),
+      });
+      await generationRecord.save();
+    }
+
+    const remaining = DAILY_GENERATION_LIMIT - generationRecord.generationsUsed;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        content: result.content,
+        usage: {
+          used: generationRecord.generationsUsed,
+          limit: DAILY_GENERATION_LIMIT,
+          remaining,
+        },
+        generatedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get student's generation history for a course
+ * GET /api/v1/ai/student/history/:courseId
+ */
+export const getStudentGenerationHistory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.userId!;
+
+    // Verify user is subscribed
+    const user = req.user!;
+    if (!user.subscription || user.subscription.plan === 'free') {
+      throw ApiError.forbidden('This feature is only available for subscribed users');
+    }
+
+    // Get all generation records for this user and course (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const records = await AIGeneration.find({
+      user: new Types.ObjectId(userId),
+      course: new Types.ObjectId(courseId),
+      date: { $gte: thirtyDaysAgo },
+    })
+      .sort({ date: -1 })
+      .limit(30);
+
+    const history = records.flatMap(record =>
+      record.generations.map(gen => ({
+        prompt: gen.prompt,
+        content: gen.content,
+        createdAt: gen.createdAt,
+        date: record.date,
+      }))
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        history,
+        total: history.length,
       },
     });
   } catch (error) {
