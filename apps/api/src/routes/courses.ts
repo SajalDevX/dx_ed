@@ -5,6 +5,7 @@ import {
   getCourseCurriculum,
   enrollInCourse,
   markLessonComplete,
+  getRecommendations,
   createCourse,
   updateCourse,
   addModule,
@@ -21,6 +22,7 @@ router.get('/', optionalAuth, getCourses);
 router.get('/:slug', optionalAuth, getCourseBySlug);
 
 // Authenticated routes
+router.get('/recommendations/for-you', authenticate, getRecommendations);
 router.get('/:slug/curriculum', authenticate, getCourseCurriculum);
 router.post('/:slug/enroll', authenticate, enrollInCourse);
 router.patch('/:slug/lessons/:lessonId/complete', authenticate, markLessonComplete);

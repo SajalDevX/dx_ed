@@ -25,11 +25,10 @@ export function Navbar() {
   const pathname = usePathname();
   const { user, isAuthenticated, logout } = useAuthStore();
 
-  const navLinks = [
-    { href: '/courses', label: 'Courses' },
-    { href: '/pricing', label: 'Pricing' },
-    { href: '/about', label: 'About' },
-  ];
+  // Only show these links when user is authenticated
+  const navLinks = isAuthenticated
+    ? [{ href: '/courses', label: 'Courses' }]
+    : [];
 
   const handleLogout = async () => {
     await logout();
