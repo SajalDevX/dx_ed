@@ -6,3 +6,4 @@ export { Category, type ICategory } from './Category.js';
 export { Order, type IOrder, type IOrderItem } from './Order.js';
 export { Review, type IReview } from './Review.js';
 export { Badge, type IBadge } from './Badge.js';
+export { default as AIGeneration, type IAIGeneration, type IGenerationRecord } from './AIGeneration.js';

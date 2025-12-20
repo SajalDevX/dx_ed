@@ -97,8 +97,12 @@ const faqs = [
 
 export default function PricingPage() {
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+
+  // Determine user's current plan
+  const userPlan = user?.subscription?.plan || 'free';
+  const isSubscribed = userPlan !== 'free';
 
   const handlePlanSelect = async (plan: typeof plans[0]) => {
     // Guild plan always goes to contact
@@ -112,14 +116,14 @@ export default function PricingPage() {
       if (isAuthenticated) {
         router.push('/courses');
       } else {
-        router.push('/register');
+        router.push('/auth?mode=signup');
       }
       return;
     }
 
     // Hero plan - needs authentication first
     if (!isAuthenticated) {
-      router.push('/register?plan=hero');
+      router.push('/auth?mode=signup&plan=hero');
       return;
     }
 
@@ -176,6 +180,23 @@ export default function PricingPage() {
               Start free and unlock legendary powers. No hidden fees, cancel your quest anytime!
             </p>
 
+            {/* Current Subscription Status */}
+            {isAuthenticated && (
+              <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#6BCB77]/20 px-4 py-2 text-sm font-bold text-[#6BCB77]">
+                {isSubscribed ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    <span>Current Plan: {userPlan === 'basic' ? 'Hero' : userPlan === 'premium' ? 'Guild' : userPlan.charAt(0).toUpperCase() + userPlan.slice(1)}</span>
+                  </>
+                ) : (
+                  <>
+                    <Star className="h-4 w-4" />
+                    <span>Current Plan: Starter (Free)</span>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Trust badges */}
             <div className="mt-8 flex items-center justify-center gap-6 text-sm text-gray-500">
               <div className="flex items-center gap-2">
@@ -195,18 +216,37 @@ export default function PricingPage() {
       <section className="pb-16 relative">
         <div className="container mx-auto px-4">
           <div className="grid gap-8 md:grid-cols-3 max-w-6xl mx-auto">
-            {plans.map((plan, index) => (
+            {plans.map((plan, index) => {
+              // Map plan names to user subscription plan values
+              const planMapping: Record<string, string> = {
+                'starter': 'free',
+                'hero': 'basic',
+                'guild': 'premium'
+              };
+              const isCurrentPlan = isAuthenticated && planMapping[plan.plan] === userPlan;
+
+              return (
               <div
                 key={plan.name}
                 className={`relative group ${plan.popular ? 'md:-mt-4 md:mb-4' : ''}`}
               >
                 {/* Popular badge */}
-                {plan.popular && (
+                {plan.popular && !isCurrentPlan && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20">
                     <div className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-[#FF6B6B] to-[#A66CFF] border-2 border-[#2D2D2D] px-4 py-2 text-xs font-bold text-white shadow-[3px_3px_0_#2D2D2D]">
                       <Zap className="h-3 w-3 animate-pulse" />
                       MOST POPULAR
                       <Star className="h-3 w-3" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Current Plan badge */}
+                {isCurrentPlan && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20">
+                    <div className="inline-flex items-center gap-1 rounded-full bg-[#6BCB77] border-2 border-[#2D2D2D] px-4 py-2 text-xs font-bold text-white shadow-[3px_3px_0_#2D2D2D]">
+                      <Check className="h-3 w-3" />
+                      YOUR CURRENT PLAN
                     </div>
                   </div>
                 )}
@@ -256,12 +296,17 @@ export default function PricingPage() {
                   <div className="mt-8">
                     <Button
                       onClick={() => handlePlanSelect(plan)}
-                      disabled={loadingPlan === plan.plan}
+                      disabled={loadingPlan === plan.plan || isCurrentPlan}
                       className={`w-full h-12 text-base group ${plan.popular ? '' : 'bg-white text-[#2D2D2D] border-3 border-[#2D2D2D] shadow-[3px_3px_0_#2D2D2D] hover:shadow-[4px_4px_0_#2D2D2D] hover:-translate-y-0.5'}`}
                       variant={plan.popular ? 'default' : 'secondary'}
                     >
                       {loadingPlan === plan.plan ? (
                         <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : isCurrentPlan ? (
+                        <>
+                          <Check className="mr-2 h-5 w-5" />
+                          Current Plan
+                        </>
                       ) : (
                         <>
                           {plan.popular && <Rocket className="mr-2 h-5 w-5 group-hover:animate-wiggle" />}
@@ -273,7 +318,8 @@ export default function PricingPage() {
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
       </section>
@@ -339,7 +385,7 @@ export default function PricingPage() {
                 Join thousands of heroes already mastering digital skills through our gamified learning platform.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link href="/register">
+                <Link href="/auth?mode=signup">
                   <Button size="xl" className="bg-white text-[#2D2D2D] hover:bg-[#FFD93D] group">
                     <Rocket className="mr-2 h-5 w-5 group-hover:animate-wiggle" />
                     Get Started Free

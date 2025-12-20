@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { Star, Clock, Users, BookOpen, Zap, Trophy } from 'lucide-react';
+import { Star, Clock, Users, BookOpen, Zap, Trophy, Unlock, Lock } from 'lucide-react';
 import { formatPrice, formatDuration } from '@/lib/utils';
 import type { Course } from '@/types';
+import { useAuthStore } from '@/stores/authStore';
+import { useRouter } from 'next/navigation';
 
 interface CourseCardProps {
   course: Course;
@@ -22,6 +24,9 @@ const levelColors = {
 };
 
 export function CourseCard({ course }: CourseCardProps) {
+  const { user } = useAuthStore();
+  const isSubscribed = user?.subscription?.plan && user.subscription.plan !== 'free';
+
   const discountedPrice = course.pricing.discount
     ? course.pricing.price * (1 - course.pricing.discount.percentage / 100)
     : null;
@@ -142,6 +147,15 @@ export function CourseCard({ course }: CourseCardProps) {
                   Free
                 </span>
                 <span className="text-xl">🎉</span>
+              </div>
+            ) : isSubscribed ? (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 rounded-full bg-gradient-to-r from-[#6BCB77] to-[#4ECDC4] px-4 py-2 border-2 border-[#2D2D2D] shadow-[2px_2px_0_#2D2D2D]">
+                  <Unlock className="h-5 w-5 text-white" />
+                  <span className="text-sm font-bold text-white" style={{ fontFamily: "'Fredoka', sans-serif" }}>
+                    Unlocked
+                  </span>
+                </div>
               </div>
             ) : (
               <div className="flex items-center gap-2">

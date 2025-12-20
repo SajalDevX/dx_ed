@@ -318,6 +318,186 @@ export const markLessonComplete = async (
   }
 };
 
+// Get course recommendations for user
+export const getRecommendations = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 8;
+
+    // Get user's enrollments to understand their interests
+    const userEnrollments = await Enrollment.find({
+      user: req.userId
+    })
+      .populate({
+        path: 'course',
+        select: 'category subcategory tags level'
+      })
+      .lean();
+
+    const enrolledCourseIds = userEnrollments.map(e => (e.course as any)._id);
+
+    // Extract user's learning patterns
+    const userCategories = new Set<string>();
+    const userSubcategories = new Set<string>();
+    const userTags = new Set<string>();
+    const userLevels = new Map<string, number>();
+
+    userEnrollments.forEach((enrollment: any) => {
+      if (enrollment.course?.category) {
+        userCategories.add(enrollment.course.category.toString());
+      }
+      if (enrollment.course?.subcategory) {
+        userSubcategories.add(enrollment.course.subcategory.toString());
+      }
+      if (enrollment.course?.tags) {
+        enrollment.course.tags.forEach((tag: string) => userTags.add(tag));
+      }
+      if (enrollment.course?.level) {
+        const level = enrollment.course.level;
+        userLevels.set(level, (userLevels.get(level) || 0) + 1);
+      }
+    });
+
+    // Determine user's appropriate difficulty level
+    const completedCourses = userEnrollments.filter((e: any) => e.status === 'completed');
+    let recommendedLevels: string[] = ['beginner'];
+
+    if (completedCourses.length === 0) {
+      recommendedLevels = ['beginner'];
+    } else if (completedCourses.length < 3) {
+      recommendedLevels = ['beginner', 'intermediate'];
+    } else {
+      const hasAdvanced = completedCourses.some((e: any) => e.course?.level === 'advanced');
+      const hasIntermediate = completedCourses.some((e: any) => e.course?.level === 'intermediate');
+
+      if (hasAdvanced) {
+        recommendedLevels = ['intermediate', 'advanced'];
+      } else if (hasIntermediate) {
+        recommendedLevels = ['intermediate', 'advanced'];
+      } else {
+        recommendedLevels = ['intermediate'];
+      }
+    }
+
+    // Build recommendation query
+    const recommendationFilter: any = {
+      _id: { $nin: enrolledCourseIds },
+      status: 'published'
+    };
+
+    // Find courses matching user's interests
+    const potentialCourses = await Course.find(recommendationFilter)
+      .populate('instructor', 'profile.firstName profile.lastName profile.avatar')
+      .populate('category', 'name slug')
+      .select('-content.modules.lessons.content')
+      .limit(limit * 3) // Get more than needed for scoring
+      .lean();
+
+    // Score each course based on multiple factors
+    interface ScoredCourse {
+      course: any;
+      score: number;
+      matchReasons: string[];
+    }
+
+    const scoredCourses: ScoredCourse[] = potentialCourses.map(course => {
+      let score = 0;
+      const matchReasons: string[] = [];
+
+      // Category match (30 points)
+      if (userCategories.has(course.category?._id?.toString() || '')) {
+        score += 30;
+        matchReasons.push('Same category as your courses');
+      }
+
+      // Subcategory match (15 points)
+      if (course.subcategory && userSubcategories.has(course.subcategory.toString())) {
+        score += 15;
+        matchReasons.push('Related subcategory');
+      }
+
+      // Tag overlap (25 points max, 5 per tag)
+      const courseTags = new Set(course.tags || []);
+      let tagMatches = 0;
+      courseTags.forEach(tag => {
+        if (userTags.has(tag)) {
+          tagMatches++;
+        }
+      });
+      const tagScore = Math.min(tagMatches * 5, 25);
+      score += tagScore;
+      if (tagMatches > 0) {
+        matchReasons.push(`${tagMatches} matching topics`);
+      }
+
+      // Level appropriateness (15 points)
+      if (recommendedLevels.includes(course.level)) {
+        score += 15;
+        matchReasons.push(`${course.level.charAt(0).toUpperCase() + course.level.slice(1)} level`);
+      }
+
+      // Popularity (10 points)
+      const enrollmentScore = Math.min((course.stats?.enrollments || 0) / 100, 10);
+      score += enrollmentScore;
+      if (enrollmentScore > 5) {
+        matchReasons.push('Popular course');
+      }
+
+      // Rating (5 points)
+      const ratingScore = ((course.stats?.averageRating || 0) / 5) * 5;
+      score += ratingScore;
+      if (ratingScore > 3) {
+        matchReasons.push('Highly rated');
+      }
+
+      // Recently added (5 points)
+      if (course.publishedAt) {
+        const daysSincePublish = (Date.now() - new Date(course.publishedAt).getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSincePublish < 30) {
+          score += 5;
+          matchReasons.push('Recently added');
+        }
+      }
+
+      // Free courses bonus (5 points) - good for new users
+      if (course.pricing?.type === 'free') {
+        score += 5;
+      }
+
+      return {
+        course,
+        score,
+        matchReasons
+      };
+    });
+
+    // Sort by score and take top courses
+    scoredCourses.sort((a, b) => b.score - a.score);
+    const topRecommendations = scoredCourses.slice(0, limit);
+
+    // Format response
+    const recommendations = topRecommendations.map(({ course, score, matchReasons }) => ({
+      ...course,
+      recommendationScore: Math.round(score),
+      matchPercentage: Math.min(Math.round(score), 100),
+      matchReasons: matchReasons.slice(0, 2) // Top 2 reasons
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        recommendations,
+        total: recommendations.length
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Create course (instructor)
 export const createCourse = async (
   req: Request,

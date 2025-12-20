@@ -57,6 +57,13 @@ export const coursesApi = {
     return response.data;
   },
 
+  getRecommendations: async (limit?: number): Promise<ApiResponse<{ recommendations: Course[]; total: number }>> => {
+    const response = await apiClient.get('/courses/recommendations/for-you', {
+      params: { limit }
+    });
+    return response.data;
+  },
+
   // Instructor routes
   getInstructorCourses: async (): Promise<ApiResponse<{ courses: Course[] }>> => {
     const response = await apiClient.get('/courses/instructor/my-courses');

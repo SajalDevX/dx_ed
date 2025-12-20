@@ -244,6 +244,172 @@ export const getBadges = async (
   }
 };
 
+// Get dashboard data
+export const getDashboard = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    // Fetch user data
+    const user = await User.findById(req.userId).populate({
+      path: 'gamification.badges.badgeId',
+      options: { limit: 5, sort: { 'gamification.badges.earnedAt': -1 } }
+    });
+
+    if (!user) {
+      throw ApiError.notFound('User not found');
+    }
+
+    // Fetch enrollments with populated course data
+    const enrollments = await Enrollment.find({
+      user: req.userId,
+      status: 'active'
+    })
+      .populate({
+        path: 'course',
+        select: 'title slug thumbnail shortDescription level category tags pricing content.totalDuration content.totalLessons instructor',
+        populate: {
+          path: 'instructor',
+          select: 'profile.firstName profile.lastName profile.avatar'
+        }
+      })
+      .sort({ 'progress.lastAccessedAt': -1 })
+      .limit(6)
+      .lean();
+
+    // Get completed enrollments count
+    const completedCount = await Enrollment.countDocuments({
+      user: req.userId,
+      status: 'completed'
+    });
+
+    // Calculate weekly stats (last 7 days)
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+    const recentEnrollments = await Enrollment.find({
+      user: req.userId,
+      'progress.lastAccessedAt': { $gte: oneWeekAgo }
+    }).lean();
+
+    const weeklyStats = {
+      timeSpent: Math.round(
+        recentEnrollments.reduce((acc, e) => acc + (e.progress?.timeSpent || 0), 0) / 60
+      ), // Convert to minutes
+      lessonsCompleted: recentEnrollments.reduce(
+        (acc, e) => acc + (e.progress?.completedLessons?.length || 0),
+        0
+      ),
+      quizzesAttempted: recentEnrollments.reduce(
+        (acc, e) => acc + (e.quizAttempts?.length || 0),
+        0
+      ),
+      avgQuizScore: 0
+    };
+
+    // Calculate average quiz score
+    const allQuizAttempts = recentEnrollments.flatMap(e => e.quizAttempts || []);
+    if (allQuizAttempts.length > 0) {
+      weeklyStats.avgQuizScore = Math.round(
+        allQuizAttempts.reduce((acc, attempt) => {
+          const score = (attempt.score / attempt.maxScore) * 100;
+          return acc + score;
+        }, 0) / allQuizAttempts.length
+      );
+    }
+
+    // Calculate XP progress
+    const currentLevel = user.gamification.level;
+    const currentXP = user.gamification.points;
+    const xpForNextLevel = currentLevel * 1000;
+    const xpProgress = {
+      current: currentXP,
+      nextLevel: xpForNextLevel,
+      percentage: Math.round((currentXP / xpForNextLevel) * 100)
+    };
+
+    // Get recent achievements (last 5 badges)
+    const recentBadges = user.gamification.badges
+      .sort((a, b) => new Date(b.earnedAt).getTime() - new Date(a.earnedAt).getTime())
+      .slice(0, 5);
+
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const recentAchievements = recentBadges.map((badge: any) => ({
+      badge: badge.badgeId,
+      earnedAt: badge.earnedAt,
+      isNew: new Date(badge.earnedAt) > sevenDaysAgo
+    }));
+
+    // Format enrolled courses data
+    const formattedEnrollments = enrollments.map((enrollment: any) => {
+      const totalLessons = enrollment.course?.content?.totalLessons || 1;
+      const completedLessons = enrollment.progress?.completedLessons?.length || 0;
+      const estimatedTimeToComplete = enrollment.course?.content?.totalDuration
+        ? Math.round((enrollment.course.content.totalDuration * (100 - enrollment.progress.percentage)) / 100)
+        : 0;
+
+      return {
+        course: enrollment.course,
+        progress: {
+          percentage: enrollment.progress?.percentage || 0,
+          currentLesson: enrollment.progress?.currentLesson,
+          completedLessons: completedLessons,
+          timeSpent: Math.round((enrollment.progress?.timeSpent || 0) / 60), // Convert to minutes
+        },
+        lastAccessedAt: enrollment.progress?.lastAccessedAt,
+        enrolledAt: enrollment.enrolledAt,
+        estimatedTimeToComplete
+      };
+    });
+
+    // Prepare response
+    const dashboardData = {
+      user: {
+        firstName: user.profile.firstName,
+        lastName: user.profile.lastName,
+        avatar: user.profile.avatar,
+        points: user.gamification.points,
+        level: user.gamification.level,
+        badges: user.gamification.badges.length,
+        streak: user.gamification.streak
+      },
+      stats: {
+        xpProgress,
+        enrolledCourses: enrollments.length,
+        completedCourses: completedCount,
+        activeCourses: enrollments.length,
+        totalBadges: user.gamification.badges.length,
+        currentStreak: user.gamification.streak.current,
+        longestStreak: user.gamification.streak.longest,
+        weeklyStats
+      },
+      enrolledCourses: formattedEnrollments,
+      recentAchievements,
+      learningStreak: {
+        current: user.gamification.streak.current,
+        isActiveToday: user.gamification.streak.lastActivityDate
+          ? new Date(user.gamification.streak.lastActivityDate).toDateString() === new Date().toDateString()
+          : false,
+        nextMilestone: user.gamification.streak.current < 7 ? 7 :
+                       user.gamification.streak.current < 14 ? 14 :
+                       user.gamification.streak.current < 30 ? 30 :
+                       user.gamification.streak.current < 100 ? 100 :
+                       user.gamification.streak.current + 50
+      }
+    };
+
+    res.json({
+      success: true,
+      data: dashboardData
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Delete account
 export const deleteAccount = async (
   req: Request,

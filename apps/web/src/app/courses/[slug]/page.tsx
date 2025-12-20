@@ -19,6 +19,8 @@ import {
   Lock,
   Loader2,
   HelpCircle,
+  Unlock,
+  Sparkles,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
@@ -30,7 +32,8 @@ export default function CourseDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const slug = params.slug as string;
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
+  const isSubscribed = user?.subscription?.plan && user.subscription.plan !== 'free';
   const [expandedModules, setExpandedModules] = useState<Set<number>>(new Set([0]));
   const [enrollError, setEnrollError] = useState<string | null>(null);
 
@@ -59,7 +62,7 @@ export default function CourseDetailPage() {
 
   const handleEnroll = () => {
     if (!isAuthenticated) {
-      router.push(`/login?redirect=/courses/${slug}`);
+      router.push(`/auth?redirect=/courses/${slug}`);
       return;
     }
     setEnrollError(null);
@@ -177,6 +180,11 @@ export default function CourseDetailPage() {
                 <div className="mb-4">
                   {course.pricing.type === 'free' ? (
                     <p className="text-3xl font-bold text-gray-900">Free</p>
+                  ) : isSubscribed ? (
+                    <div className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 px-4 py-3">
+                      <Unlock className="h-6 w-6 text-white" />
+                      <span className="text-xl font-bold text-white">Unlocked with Subscription</span>
+                    </div>
                   ) : (
                     <div className="flex items-baseline gap-2">
                       <p className="text-3xl font-bold text-gray-900">
@@ -192,11 +200,21 @@ export default function CourseDetailPage() {
                 </div>
 
                 {isEnrolled ? (
-                  <Link href={`/courses/${slug}/learn`}>
-                    <Button className="w-full" size="lg">
-                      Continue Learning
-                    </Button>
-                  </Link>
+                  <div className="space-y-3">
+                    <Link href={`/courses/${slug}/learn`}>
+                      <Button className="w-full" size="lg">
+                        Continue Learning
+                      </Button>
+                    </Link>
+                    {isSubscribed && (
+                      <Link href={`/courses/${slug}/generate`}>
+                        <Button className="w-full bg-gradient-to-r from-[#A66CFF] to-[#FF6B6B] hover:from-[#FF6B6B] hover:to-[#A66CFF] text-white border-2" size="lg">
+                          <Sparkles className="mr-2 h-5 w-5" />
+                          AI Content Generator
+                        </Button>
+                      </Link>
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {course.pricing.type === 'free' ? (
@@ -237,7 +255,7 @@ export default function CourseDetailPage() {
                     )}
                     {!isAuthenticated && (
                       <p className="text-center text-sm text-gray-500">
-                        <Link href="/login" className="text-blue-600 hover:underline">
+                        <Link href="/auth" className="text-blue-600 hover:underline">
                           Log in
                         </Link>{' '}
                         to enroll

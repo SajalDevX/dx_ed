@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import {
   Gamepad2,
@@ -13,8 +15,25 @@ import {
   Crown,
   Flame,
   Gift,
+  Check,
+  Shield,
+  LayoutDashboard,
+  BookOpen,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
+import { useAuthStore } from '@/stores/authStore';
+import { usersApi } from '@/lib/api/users';
+import { coursesApi } from '@/lib/api/courses';
+import {
+  DashboardHeader,
+  StatsCards,
+  EnrolledCoursesSection,
+  RecommendationsSection,
+  LearningStatsPanel,
+  RecentAchievements,
+  QuickActions,
+} from '@/components/dashboard';
 
 const stats = [
   { value: '50+', label: 'Epic Quests', icon: '🎮', color: 'from-purple-400 to-pink-500' },
@@ -57,7 +76,148 @@ const features = [
   },
 ];
 
+// User Dashboard View Component
+function UserDashboardView({ user }: { user: any }) {
+  // Fetch dashboard data
+  const { data: dashboardData, isLoading: isDashboardLoading } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: async () => {
+      const response = await usersApi.getDashboard();
+      return response.data;
+    },
+  });
+
+  // Fetch recommendations
+  const { data: recommendationsData, isLoading: isRecommendationsLoading } = useQuery({
+    queryKey: ['recommendations'],
+    queryFn: async () => {
+      const response = await coursesApi.getRecommendations(8);
+      return response.data;
+    },
+  });
+
+  // Show loading state
+  if (isDashboardLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4 animate-bounce">⚡</div>
+          <p className="text-xl font-bold text-gray-700">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!dashboardData) {
+    return null;
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
+      <div className="container mx-auto px-4 py-8">
+        {/* Dashboard Header */}
+        <DashboardHeader
+          firstName={dashboardData.user.firstName}
+          lastName={dashboardData.user.lastName}
+          currentStreak={dashboardData.stats.currentStreak}
+          isActiveToday={dashboardData.learningStreak.isActiveToday}
+        />
+
+        {/* Stats Cards */}
+        <div className="mt-8">
+          <StatsCards
+            stats={{
+              xpProgress: dashboardData.stats.xpProgress,
+              currentStreak: dashboardData.stats.currentStreak,
+              longestStreak: dashboardData.stats.longestStreak,
+              totalBadges: dashboardData.stats.totalBadges,
+              enrolledCourses: dashboardData.stats.enrolledCourses,
+              completedCourses: dashboardData.stats.completedCourses,
+            }}
+            userLevel={dashboardData.user.level}
+          />
+        </div>
+
+        {/* Enrolled Courses */}
+        <EnrolledCoursesSection courses={dashboardData.enrolledCourses} />
+
+        {/* Recommendations */}
+        <RecommendationsSection
+          recommendations={recommendationsData?.recommendations || []}
+          isLoading={isRecommendationsLoading}
+        />
+
+        {/* Learning Stats and Achievements */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12">
+          <LearningStatsPanel weeklyStats={dashboardData.stats.weeklyStats} />
+          <RecentAchievements achievements={dashboardData.recentAchievements} />
+        </div>
+
+        {/* Quick Actions */}
+        <QuickActions />
+      </div>
+    </div>
+  );
+}
+
 export default function HomePage() {
+  const { user, isAuthenticated } = useAuthStore();
+
+  // Determine user's current plan
+  const userPlan = user?.subscription?.plan || 'free';
+  const isSubscribed = userPlan !== 'free';
+
+  const pricingPlans = [
+    {
+      name: 'Starter',
+      emoji: '🌱',
+      price: '0',
+      description: 'Perfect for beginners',
+      color: 'from-[#6BCB77] to-[#4ECDC4]',
+      features: [
+        { text: 'Access to free quests', included: true },
+        { text: 'Basic challenges & quizzes', included: true },
+        { text: 'Community guild access', included: true },
+      ],
+      plan: 'free',
+    },
+    {
+      name: 'Hero',
+      emoji: '🦸',
+      price: '19',
+      description: 'For serious adventurers',
+      color: 'from-[#FFD93D] to-[#FF6B6B]',
+      features: [
+        { text: 'All Starter features', included: true },
+        { text: 'Access to ALL quests', included: true },
+        { text: 'Skill certificates', included: true },
+        { text: 'Priority support', included: true },
+      ],
+      plan: 'basic',
+      popular: true,
+    },
+    {
+      name: 'Guild',
+      emoji: '🏰',
+      price: '49',
+      description: 'For teams & organizations',
+      color: 'from-[#A66CFF] to-[#FF6B6B]',
+      features: [
+        { text: 'All Hero features', included: true },
+        { text: 'Team management', included: true },
+        { text: 'Custom learning paths', included: true },
+        { text: 'Analytics dashboard', included: true },
+      ],
+      plan: 'premium',
+    },
+  ];
+
+  // If user is logged in, show personalized dashboard
+  if (isAuthenticated && user) {
+    return <UserDashboardView user={user} />;
+  }
+
+  // Show marketing page for non-authenticated users
   return (
     <div className="bg-[#FFF9E6] overflow-hidden">
       {/* Floating Decorations */}
@@ -390,7 +550,7 @@ export default function HomePage() {
                 </p>
 
                 {/* CTA Button */}
-                <Link href="/register">
+                <Link href="/auth?mode=signup">
                   <Button size="xl" className="mt-8 group bg-white text-[#2D2D2D] hover:bg-[#FFD93D]">
                     <Rocket className="mr-2 h-5 w-5 group-hover:animate-wiggle" />
                     Start Your Quest
@@ -430,6 +590,202 @@ export default function HomePage() {
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* About Section - Simplified */}
+      <section className="py-20 relative">
+        <div className="absolute inset-0 dots-pattern opacity-20" />
+
+        <div className="container mx-auto px-4 relative">
+          {/* Section Header */}
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#A66CFF] to-[#FF6B6B] border-3 border-[#2D2D2D] px-6 py-3 text-sm font-bold text-white shadow-[4px_4px_0_#2D2D2D] mb-6">
+              <Sparkles className="h-5 w-5 animate-sparkle" />
+              <span>Our Story</span>
+            </div>
+            <h2 className="text-4xl font-bold text-[#2D2D2D] sm:text-5xl" style={{ fontFamily: "'Fredoka', sans-serif" }}>
+              We're Building the{' '}
+              <span className="relative inline-block">
+                <span className="relative z-10 bg-gradient-to-r from-[#FF6B6B] via-[#FFD93D] to-[#4ECDC4] bg-clip-text text-transparent">
+                  Future of Learning
+                </span>
+              </span>
+              <span className="inline-block ml-2 animate-wiggle">🎮</span>
+            </h2>
+            <p className="mt-6 text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
+              DXTalent is on an epic quest to transform how people learn digital skills.
+              We believe in <span className="font-bold text-[#FF6B6B]">learning by doing</span>,
+              <span className="font-bold text-[#FFD93D]"> gamification</span>, and
+              <span className="font-bold text-[#4ECDC4]"> celebrating every achievement</span>.
+            </p>
+          </div>
+
+          {/* Mission pillars */}
+          <div className="grid gap-6 sm:grid-cols-3 max-w-4xl mx-auto">
+            {[
+              { emoji: '🎓', title: 'Learn', desc: 'Interactive quests and challenges', color: 'from-[#FF6B6B] to-[#FF9EAA]' },
+              { emoji: '🏆', title: 'Prove', desc: 'Earn recognition and badges', color: 'from-[#FFD93D] to-[#FFC107]' },
+              { emoji: '🚀', title: 'Connect', desc: 'Get discovered by companies', color: 'from-[#4ECDC4] to-[#6BCB77]' },
+            ].map((pillar, index) => (
+              <div
+                key={pillar.title}
+                className="bg-white rounded-[25px] border-4 border-[#2D2D2D] p-6 shadow-[6px_6px_0_#2D2D2D] hover:shadow-[8px_8px_0_#2D2D2D] hover:-translate-y-2 transition-all text-center"
+              >
+                <div className={`absolute top-0 left-0 right-0 h-2 bg-gradient-to-r ${pillar.color} rounded-t-[21px]`} />
+                <span className="text-5xl block animate-float mt-2" style={{ animationDelay: `${index * 0.2}s` }}>{pillar.emoji}</span>
+                <h3 className="mt-4 text-xl font-bold text-[#2D2D2D]" style={{ fontFamily: "'Fredoka', sans-serif" }}>{pillar.title}</h3>
+                <p className="mt-2 text-sm text-gray-600">{pillar.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing Section - Simplified */}
+      <section className="py-20 relative">
+        <div className="container mx-auto px-4">
+          {/* Section Header */}
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#FFD93D] to-[#FF6B6B] border-3 border-[#2D2D2D] px-6 py-3 text-sm font-bold text-[#2D2D2D] shadow-[4px_4px_0_#2D2D2D] mb-6">
+              <Crown className="h-5 w-5" />
+              <span>Choose Your Power Level</span>
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <h2 className="text-4xl font-bold text-[#2D2D2D] sm:text-5xl" style={{ fontFamily: "'Fredoka', sans-serif" }}>
+              Level Up Your{' '}
+              <span className="relative inline-block">
+                <span className="relative z-10 bg-gradient-to-r from-[#FF6B6B] to-[#A66CFF] bg-clip-text text-transparent">
+                  Adventure
+                </span>
+              </span>
+              <span className="inline-block ml-2 animate-wiggle">🚀</span>
+            </h2>
+            <p className="mt-4 text-lg text-gray-600 max-w-xl mx-auto">
+              Start free and unlock legendary powers. No hidden fees!
+            </p>
+            {isAuthenticated && (
+              <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#6BCB77]/20 px-4 py-2 text-sm font-bold text-[#6BCB77]">
+                {isSubscribed ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    <span>Current Plan: {userPlan === 'basic' ? 'Hero' : userPlan === 'premium' ? 'Guild' : userPlan.charAt(0).toUpperCase() + userPlan.slice(1)}</span>
+                  </>
+                ) : (
+                  <>
+                    <Star className="h-4 w-4" />
+                    <span>Current Plan: Starter (Free)</span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Pricing Cards */}
+          <div className="grid gap-6 sm:grid-cols-3 max-w-5xl mx-auto">
+            {pricingPlans.map((plan, index) => {
+              const isCurrentPlan = isAuthenticated && plan.plan === userPlan;
+
+              return (
+                <div
+                  key={plan.name}
+                  className={`relative ${plan.popular ? 'sm:-mt-4' : ''}`}
+                >
+                  {/* Popular badge */}
+                  {plan.popular && (
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20">
+                      <div className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-[#FF6B6B] to-[#A66CFF] border-2 border-[#2D2D2D] px-4 py-2 text-xs font-bold text-white shadow-[3px_3px_0_#2D2D2D]">
+                        <Zap className="h-3 w-3 animate-pulse" />
+                        MOST POPULAR
+                        <Star className="h-3 w-3" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Current Plan badge */}
+                  {isCurrentPlan && (
+                    <div className="absolute -top-4 right-4 z-20">
+                      <div className="inline-flex items-center gap-1 rounded-full bg-[#6BCB77] border-2 border-[#2D2D2D] px-3 py-1.5 text-xs font-bold text-white shadow-[2px_2px_0_#2D2D2D]">
+                        <Check className="h-3 w-3" />
+                        YOUR PLAN
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Card */}
+                  <div className={`bg-white rounded-[25px] border-4 ${plan.popular ? 'border-[#FFD93D]' : 'border-[#2D2D2D]'} p-6 shadow-[6px_6px_0_#2D2D2D] hover:shadow-[8px_8px_0_#2D2D2D] hover:-translate-y-2 transition-all h-full flex flex-col`}>
+                    {/* Colored top bar */}
+                    <div className={`absolute top-0 left-0 right-0 h-2 bg-gradient-to-r ${plan.color} rounded-t-[21px]`} />
+
+                    {/* Header */}
+                    <div className="text-center mt-2">
+                      <span className="text-4xl block animate-float" style={{ animationDelay: `${index * 0.2}s` }}>{plan.emoji}</span>
+                      <h3 className="mt-3 text-xl font-bold text-[#2D2D2D]" style={{ fontFamily: "'Fredoka', sans-serif" }}>
+                        {plan.name}
+                      </h3>
+                      <p className="mt-1 text-xs text-gray-500">{plan.description}</p>
+
+                      {/* Price */}
+                      <div className="mt-4 flex items-end justify-center gap-1">
+                        <span className="text-sm text-gray-400">$</span>
+                        <span className={`text-4xl font-bold bg-gradient-to-r ${plan.color} bg-clip-text text-transparent`} style={{ fontFamily: "'Fredoka', sans-serif" }}>
+                          {plan.price}
+                        </span>
+                        <span className="text-gray-500 text-sm mb-1">/mo</span>
+                      </div>
+                    </div>
+
+                    {/* Features */}
+                    <ul className="mt-6 space-y-2 flex-1">
+                      {plan.features.map((feature) => (
+                        <li key={feature.text} className="flex items-start gap-2">
+                          <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center bg-[#6BCB77]/20">
+                            <Check className="h-3 w-3 text-[#6BCB77]" />
+                          </div>
+                          <span className="text-xs text-gray-700">{feature.text}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {/* CTA */}
+                    <div className="mt-6">
+                      <Link href="/pricing">
+                        <Button
+                          className="w-full text-sm"
+                          variant={plan.popular ? 'default' : 'secondary'}
+                          disabled={isCurrentPlan}
+                        >
+                          {isCurrentPlan ? (
+                            <>
+                              <Check className="mr-2 h-4 w-4" />
+                              Current Plan
+                            </>
+                          ) : (
+                            <>
+                              {plan.plan === 'free' ? 'Get Started' : 'Upgrade'}
+                              <ArrowRight className="ml-2 h-4 w-4" />
+                            </>
+                          )}
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Trust badges */}
+          <div className="mt-10 flex items-center justify-center gap-6 text-sm text-gray-500">
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-[#6BCB77]" />
+              <span>Secure payments</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-[#FFD93D]" />
+              <span>30-day guarantee</span>
             </div>
           </div>
         </div>
