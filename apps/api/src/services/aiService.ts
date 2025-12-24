@@ -419,7 +419,7 @@ Return a JSON object with a "questions" array:
     studentPrompt: string;
     provider?: AIProvider;
   }): Promise<{ content: string; provider: AIProvider }> {
-    const selectedProvider = this.selectProvider(params.provider);
+    const selectedProvider = this.getProvider(params.provider);
 
     const systemPrompt = `You are an expert educational content creator and tutor. You're helping a student who is learning about "${params.courseTitle}".
 
